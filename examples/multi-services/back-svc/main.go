@@ -11,6 +11,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/riandyrn/otelchi"
 	"github.com/riandyrn/otelchi/examples/multi-services/utils"
+	"go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/trace"
 )
 
@@ -25,11 +26,20 @@ func main() {
 	if err != nil {
 		log.Fatalf("unable to initialize tracer provider due: %v", err)
 	}
+	meter, err := utils.NewMeter(serviceName)
+	if err != nil {
+		log.Fatalf("unable to initialize meter provider due: %v", err)
+	}
+	apiGetNameCounter, err := meter.Int64Counter("get-name", metric.WithDescription("count api GET /name being hit"))
+	if err != nil {
+		log.Fatalf("unable to create counter due: %v", err)
+	}
 	// define router
 	r := chi.NewRouter()
 	r.Use(otelchi.Middleware(serviceName, otelchi.WithChiRoutes(r)))
 	r.Get("/", utils.HealthCheckHandler)
 	r.Get("/name", func(w http.ResponseWriter, r *http.Request) {
+		apiGetNameCounter.Add(r.Context(), 1)
 		w.Write([]byte(generateName(r.Context(), tracer)))
 	})
 	log.Printf("back service is listening on %v", addr)
